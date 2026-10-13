@@ -1,0 +1,92 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mathpilot}
+      POSTGRES_USER: ${POSTGRES_USER:-mathpilot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mathpilot}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mathpilot} -d ${POSTGRES_DB:-mathpilot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment: &backend-env
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://mathpilot:mathpilot@db:5432/mathpilot}
+      REDIS_URL: redis://redis:6379/0
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
+      REMINDER_API_SECRET: ${REMINDER_API_SECRET:-}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8000/api/v1}
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  worker:
+    build: ./backend
+    environment: *backend-env
+    command: ["celery", "-A", "app.celery_app:celery_app", "worker", "--loglevel=INFO", "--concurrency=2"]
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  beat:
+    build: ./backend
+    environment: *backend-env
+    command: ["celery", "-A", "app.celery_app:celery_app", "beat", "--loglevel=INFO", "--schedule=/data/celerybeat-schedule"]
+    volumes:
+      - beat_data:/data
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
+        INTERNAL_API_URL: http://backend:8000
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:
+  beat_data:
+

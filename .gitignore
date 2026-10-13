@@ -13,8 +13,10 @@ __pycache__/
 *.tsbuildinfo
 .railway/
 .netlify/
+docs/screenshots/
 *.sqlite3
 *.db
 backend/.coverage
 frontend/node_modules/
 frontend/.next/
+

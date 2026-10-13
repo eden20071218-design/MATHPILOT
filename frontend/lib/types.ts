@@ -1,0 +1,12 @@
+export type Student = {id:string;display_name:string;email:string;timezone:string};
+export type Goal = {id:string;target_score:number;target_date:string;daily_minutes:number};
+export type Exam = {id:string;title:string;exam_date:string;total_score:number;achieved_score:number;version:number};
+export type Task = {id:string;knowledge_point_id:string|null;title:string;content:string|null;instructions:string|null;status:string;scheduled_start:string|null;due_at:string|null;estimated_minutes:number;is_locked:boolean;kind:string;completion_criterion:string|null;difficulty:number|null};
+export type KnowledgeState = {mastery:number;confidence:number;recorded_at:string;source_type:string;evidence_count:number};
+export type Knowledge = {id:string;name:string;description:string|null;history:KnowledgeState[]};
+export type ReminderSettings = {enabled:boolean;lead_minutes:number;timezone:string;quiet_start:string|null;quiet_end:string|null};
+export type Priority = {score:number;explanation?:string;[key:string]:unknown};
+export type Plan = {id:string;result:{status:string;priorities:Record<string,Priority>;adjustment_reasons:string[];unmet:string[];stages:{stage:string;goal:string;start:string;deadline:string;task_ids:string[]}[];weekly_plans:{week:number;goal:string;task_ids:string[]}[]};created_at:string};
+export type Diagnosis = {id:string;report:{total_score:number;max_score:number;warnings:string[];methodology:string[];loss_by_reason:Record<string,number>;knowledge_points:{knowledge_point_id:string;explanation:string;recommendations:string[];persistent_weakness:boolean}[]}};
+export type Overview = {student:Student;goal:Goal|null;preferences:{study_start?:string;full_score?:number;hide_scores?:boolean};reminders:ReminderSettings;knowledge:Knowledge[];exams:Exam[];tasks:Task[];planning:Plan|null;diagnosis:Diagnosis|null};
+export type TaskDetail = {task:Task;attempts:{id:string;completed_at:string;score:number;feedback:string;result_data:{score_rate:number}}[]};
