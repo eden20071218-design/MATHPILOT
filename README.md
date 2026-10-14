@@ -43,6 +43,7 @@ uvicorn app.main:app --reload
 ## 学习规划
 
 LangGraph 工作流提供 `/api/v1/planning/preview` 和 `/api/v1/planning/runs`，支持依赖优先、时间约束、间隔复习、阶段测验及保留锁定任务的重排。详见 [规划说明](docs/planning.md)。在 backend 目录运行 `python examples/plan_learning.py --summary` 查看模拟结果。
+学生可在网页“规划解释”页输入自己的 DeepSeek API Key，勾选后仅本次规划调用；密钥不保存。管理员也可用后端环境变量 `DEEPSEEK_ENABLED=true`、`DEEPSEEK_API_KEY` 配置服务端密钥。默认关闭，不调用付费 API。
 
 ## 提醒与反馈
 

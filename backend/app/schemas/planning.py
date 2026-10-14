@@ -60,6 +60,7 @@ class PlanningRequest(StrictModel):
     completion_rate: float = Field(default=1, ge=0, le=1, allow_inf_nan=False)
     exam_rates: list[float] = Field(default_factory=list, max_length=100)
     reason: str = Field(default='首次规划', min_length=1, max_length=2000)
+    use_ai: bool = False
 
     @model_validator(mode='after')
     def consistent(self):

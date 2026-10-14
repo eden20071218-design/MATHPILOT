@@ -1,6 +1,14 @@
 # 个性化数学学习规划
 
-工作流由真实 LangGraph StateGraph 编译运行：START → diagnosis → priority → generate → validate → save → END。预览保留 save 节点但不写库，保存接口在该节点原子写入学习计划、任务和审计快照。无需外部模型或 API 密钥。
+工作流由真实 LangGraph StateGraph 编译运行：START → diagnosis → priority → ai_suggest → generate → validate → save → END。预览保留 save 节点但不写库，保存接口在该节点原子写入学习计划、任务和审计快照。默认无需外部模型或 API 密钥；DeepSeek 建议为显式开启的可选功能。
+
+## 可选 DeepSeek 接入
+
+学生可在网页“规划解释”页勾选 DeepSeek、输入自己的 API Key，然后生成计划。网页只把密钥放在本次 HTTPS 请求体里，使用后清除内存输入；不放入浏览器持久存储、规划快照、数据库或导出数据。学生接口 `POST /api/v1/student/planning` 接受 `use_ai: true` 与 `deepseek_api_key`；服务端 `GenerateInput` 用 `SecretStr` 接收，再经本次工作流调用 DeepSeek。没有登录态、CSRF 请求头或同源来源的请求会被拒绝。匿名或其他学生无法读取这个密钥。部署无需设置服务器级 DeepSeek 密钥。
+
+原有后端环境变量 `DEEPSEEK_ENABLED=true`、`DEEPSEEK_API_KEY` 仍可供管理员专用规划 API 选用；学生自己输入的密钥优先，只用于本次调用。模型默认 `deepseek-flash`，官方兼容接口地址默认为 `https://api.deepseek.com`。只发送知识点名称、UUID、掌握指标、不确定性和前置关系，不发送学生 ID、姓名或考试原始记录。模型只建议基础学习任务的内容与完成标准；优先级、时间、每日上限、依赖顺序仍由确定性代码计算与校验。调用失败、超时或结构校验失败时回退模板，结果的 `ai.status` 为 `fallback`，不影响保存。`ai.status` 还可能是 `not_requested`、`not_configured` 或 `used`。
+
+DeepSeek API 按其自身计费，与 Railway 免费试用额度无关。保持 `use_ai=false` 不会产生模型调用。启用前请确认预算及学生数据处理授权。生产部署应使用 HTTPS，并注意反向代理、APM、错误监控不可记录包含密钥的请求体或 Authorization 头。官方文档：[首次 API 调用](https://api-docs.deepseek.com/guides/codex)、[JSON Output](https://api-docs.deepseek.com/guides/json_mode/)、[模型与价格](https://api-docs.deepseek.com/quick_start/pricing/)。
 
 ## 运行模拟数据
 

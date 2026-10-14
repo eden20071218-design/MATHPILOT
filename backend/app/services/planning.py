@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 
 from langgraph.graph import StateGraph, START, END
 from app.schemas.planning import PlanningRequest, PlannedTask
+from app.services.deepseek_planning import suggest
 
 
 class PlanningConflict(ValueError):
@@ -18,6 +19,8 @@ class State(TypedDict, total=False):
     unmet: list
     reasons: list
     result: dict
+    ai_suggestions: dict
+    ai_info: dict
 
 
 def protected(task):
@@ -121,8 +124,10 @@ def generate(state):
             minutes = min(remaining, request.daily_minutes, new_budget, 20 if request.completion_rate < 0.7 else 30)
             if minutes <= 0:
                 break
-            task = place(k, 'learn', minutes, earliest, f'学习{k.name}：复述定义、整理适用条件并完成分步例题',
-                         '提交定义与条件清单、至少2道带过程的基础题；记录未理解步骤，完成后复测')
+            advice = state.get('ai_suggestions', {}).get(k.id)
+            task = place(k, 'learn', minutes, earliest,
+                         advice.content if advice else f'学习{k.name}：复述定义、整理适用条件并完成分步例题',
+                         advice.completion_criterion if advice else '提交定义与条件清单、至少2道带过程的基础题；记录未理解步骤，完成后复测')
             if task is None:
                 break
             remaining -= minutes
@@ -212,24 +217,31 @@ def validate(state):
             stages.append({'stage': kind, 'goal': goal, 'start': min(t.start for t in selected).isoformat(),
                            'deadline': max(t.end for t in selected).isoformat(), 'task_ids': [str(t.id) for t in selected]})
     reasons = [*state['reasons'], f'保留{len(original)}个已完成、进行中或锁定任务；按最新证据重建其余日程。']
+    ai_info = state.get('ai_info', {'status': 'not_requested'})
+    if ai_info['status'] == 'used':
+        reasons.append('DeepSeek 仅提供学习任务文案建议；优先级、时间和前置依赖仍由确定性规则计算与校验。')
+    elif ai_info['status'] in ('fallback', 'not_configured'):
+        reasons.append('AI 建议不可用，已使用确定性任务模板。')
     return {'result': {'model_version': 'planner-v1', 'tasks': [t.model_dump(mode='json') for t in tasks],
         'priorities': state['priorities'], 'stages': stages, 'weekly_plans': weekly,
         'long_term_goal': {'current_score': request.current_score, 'target_score': request.target_score, 'exam_at': request.exam_at.isoformat()},
         'daily_minutes': {str(day): minutes for day, minutes in sorted(totals.items())},
         'unmet': state['unmet'], 'adjustment_reasons': reasons,
-        'status': 'partial' if state['unmet'] else 'scheduled'}}
+        'status': 'partial' if state['unmet'] else 'scheduled', 'ai': ai_info}}
 
 
-def build_workflow(save=None):
+def build_workflow(save=None, ai_api_key=None):
     graph = StateGraph(State)
-    for name, function in [('diagnosis', diagnosis), ('priority', prioritize), ('generate', generate), ('validate', validate),
+    for name, function in [('diagnosis', diagnosis), ('priority', prioritize),
+                           ('ai_suggest', lambda state: suggest(state, api_key=ai_api_key)),
+                           ('generate', generate), ('validate', validate),
                            ('save', save or (lambda state: {}))]:
         graph.add_node(name, function)
-    chain = [START, 'diagnosis', 'priority', 'generate', 'validate', 'save', END]
+    chain = [START, 'diagnosis', 'priority', 'ai_suggest', 'generate', 'validate', 'save', END]
     for before, after in zip(chain, chain[1:]):
         graph.add_edge(before, after)
     return graph.compile()
 
 
-def plan(request: PlanningRequest):
-    return build_workflow().invoke({'request': request})['result']
+def plan(request: PlanningRequest, ai_api_key=None):
+    return build_workflow(ai_api_key=ai_api_key).invoke({'request': request})['result']

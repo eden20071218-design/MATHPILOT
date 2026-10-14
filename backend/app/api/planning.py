@@ -30,6 +30,10 @@ def aware(value):
 
 @router.post('/runs')
 def save_run(request: PlanningRequest, db: Session = Depends(get_db)):
+    return save_run_with_key(request, db)
+
+
+def save_run_with_key(request: PlanningRequest, db: Session, ai_api_key: str | None = None):
     if db.scalar(select(Student).where(Student.id == request.student_id).with_for_update()) is None:
         raise HTTPException(404, '学生不存在')
     goal = db.get(LearningGoal, request.goal_id) if request.goal_id else None
@@ -124,7 +128,7 @@ def save_run(request: PlanningRequest, db: Session = Depends(get_db)):
             sync_task(db, task)
         return {'result': {'id': str(run.id), 'plan_id': str(learning_plan.id), 'duplicate': False, **state['result']}}
     try:
-        result = build_workflow(persist).invoke({'request': effective})['result']
+        result = build_workflow(persist, ai_api_key=ai_api_key).invoke({'request': effective})['result']
         db.commit()
         return result
     except (PlanningConflict, IntegrityError) as exc:

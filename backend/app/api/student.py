@@ -6,7 +6,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -24,7 +24,7 @@ from app.schemas.reminders import ReminderSettings
 from app.services.reminders import utc, sync_task, preference
 from app.services.knowledge_import import digest
 from app.api.diagnosis import from_exam
-from app.api.planning import save_run
+from app.api.planning import save_run_with_key
 from app.api.reminders import put_settings
 
 router=APIRouter(prefix='/student',tags=['Student workspace'])
@@ -216,6 +216,18 @@ def update_settings(data: StudentSettings,student=Depends(require_student),db: S
 
 class GenerateInput(StrictModel):
     reason: str=Field(default='学生主动根据最新成绩和目标重新规划',min_length=1,max_length=1000)
+    use_ai: bool=False
+    deepseek_api_key: SecretStr | None=None
+
+    @model_validator(mode='after')
+    def key_requires_opt_in(self):
+        if self.deepseek_api_key and not self.use_ai:
+            raise ValueError('填写 DeepSeek API Key 时须明确开启 AI 建议')
+        if self.use_ai and not self.deepseek_api_key:
+            raise ValueError('开启 DeepSeek 建议时须提供自己的 API Key')
+        if self.deepseek_api_key and not 8<=len(self.deepseek_api_key.get_secret_value().strip())<=512:
+            raise ValueError('DeepSeek API Key 长度无效')
+        return self
 
 
 @router.post('/planning')
@@ -248,8 +260,8 @@ def generate(data: GenerateInput,student=Depends(require_student),db: Session=De
     full=float(prefs.get('full_score',100))
     request=PlanningRequest(student_id=student.id,goal_id=goal.id,previous_run_id=previous.id if previous else None,
         current_score=float(exam.achieved_score)/float(exam.total_score)*full,target_score=float(goal.target_score),full_score=full,
-        start_at=start,exam_at=exam_at,timezone=student.timezone,daily_minutes=goal.daily_minutes,availability=windows,knowledge=knowledge,reason=data.reason)
-    return save_run(request,db)
+        start_at=start,exam_at=exam_at,timezone=student.timezone,daily_minutes=goal.daily_minutes,availability=windows,knowledge=knowledge,reason=data.reason,use_ai=data.use_ai)
+    return save_run_with_key(request,db,ai_api_key=data.deepseek_api_key.get_secret_value().strip() if data.deepseek_api_key else None)
 
 
 @router.get('/export')
