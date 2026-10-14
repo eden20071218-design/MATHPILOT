@@ -1,5 +1,6 @@
 """Actual HTTP integration against the running Next.js proxy and FastAPI.
-Only creates synthetic local test accounts; no pre-existing records are changed.
+Only creates synthetic test accounts; no pre-existing records are changed.
+Remote HTTPS acceptance requires both explicit write flags.
 """
 import argparse
 import secrets
@@ -14,10 +15,13 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--base-url',default='http://localhost:3000/api/v1')
     parser.add_argument('--allow-demo-writes',action='store_true')
+    parser.add_argument('--allow-remote-demo-writes',action='store_true')
     args=parser.parse_args()
-    if not args.allow_demo_writes or urlsplit(args.base_url).hostname not in ('localhost','127.0.0.1'):
-        parser.error('仅允许本机合成数据验收，须传入 --allow-demo-writes')
-    headers={'X-MathPilot-Request':'1'}
+    target=urlsplit(args.base_url)
+    local=target.hostname in ('localhost','127.0.0.1')
+    if not args.allow_demo_writes or (not local and not (args.allow_remote_demo_writes and target.scheme=='https')):
+        parser.error('须传入 --allow-demo-writes；远程 HTTPS 验收还需 --allow-remote-demo-writes')
+    headers={'X-MathPilot-Request':'1','Origin':f'{target.scheme}://{target.netloc}'}
     today=datetime.now(ZoneInfo('Asia/Shanghai')).date()
     password=secrets.token_urlsafe(24)
     with httpx.Client(base_url=args.base_url,headers=headers,timeout=40) as client:
@@ -49,7 +53,7 @@ def main():
         call('POST','/auth/logout')
         assert client.get('/student/overview').status_code==401
     print('PASS: Next.js同源代理 → FastAPI → 数据库；注册/目标/多标签成绩/幂等/规划/反馈/双账号隔离/注销。')
-    print('已留下两个明确标注的本地合成测试账号；不修改或删除原有数据。')
+    print('已留下两个明确标注的合成测试账号；不修改或删除原有数据。')
 
 
 if __name__=='__main__':main()

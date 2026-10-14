@@ -1,5 +1,7 @@
 # MathPilot
 
+试用网站：[打开 MathPilot](https://frontend-production-0e0d.up.railway.app)。仅使用 Railway Trial 免费额度，不保证长期在线；请勿将试用库作为唯一学生档案。[部署记录与限制](docs/railway-deployment.md)。
+
 MathPilot 是面向数学学习的智能规划应用，现包含完整学生端页面、账号会话、成绩与知识画像、LangGraph 学习规划、任务反馈及 Web Push 提醒模块。使用 Next.js、React、TypeScript、Tailwind CSS、FastAPI、SQLAlchemy、Alembic 和 Docker Compose。
 
 **首次使用请阅读 [学生端启动、联调与部署说明](docs/student-web.md)**。旧管理 API 现须 `X-Admin-Key`，学生端使用 HttpOnly 会话 Cookie；不再允许匿名访问全部学生记录。
